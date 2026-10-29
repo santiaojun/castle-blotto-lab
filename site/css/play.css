@@ -1,0 +1,48 @@
+.board{max-width:900px;margin:0 auto}
+.head{text-align:center;margin-bottom:18px}
+.head .lede{margin:0 auto}
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px 22px;padding-bottom:18px;border-bottom:2px solid var(--rule)}
+.settings label.lab{display:block;font-size:13px;color:var(--ink-2);margin-bottom:4px}
+.field-row{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;gap:8px}
+.field-row output{font-size:13px;text-align:right;color:var(--ink-2)}
+
+/* arena: five castle columns + a total column on the right */
+.arena{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 150px;gap:10px clamp(8px,2.2vw,22px);align-items:end;margin-top:22px}
+.slot{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.slot .castle{max-width:120px}
+.slot .v{font-size:12.5px;color:var(--ink-2)}
+.qty{width:100%;max-width:120px}
+.qty input{width:100%;text-align:center;font-family:var(--display);font-weight:900;font-size:24px;padding:6px 2px;-moz-appearance:textfield}
+.qty input::-webkit-inner-spin-button,.qty input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.steps button{border:2px solid var(--rule);background:var(--card);color:var(--ink);border-radius:8px;font:inherit;font-size:18px;font-weight:700;line-height:1;padding:6px 0;cursor:pointer;user-select:none;touch-action:manipulation}
+.steps button:hover{background:var(--soft)}
+.total{grid-column:6;grid-row:1 / span 2;align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:4px;border:3px solid var(--rule);border-radius:12px;padding:12px;text-align:center}
+.total .lbl{font-size:13px;color:var(--ink-2)}
+.total .big{font-family:var(--display);font-weight:900;font-size:34px;line-height:1.1;font-variant-numeric:tabular-nums}
+.total .big small{font-size:16px;color:var(--ink-2);font-weight:600}
+.total .note{font-size:13.5px;font-weight:700;min-height:20px}
+.total.ok{border-color:var(--cpu2)}.total.ok .note{color:var(--cpu2)}
+.total.bad{border-color:var(--cpu1);background:color-mix(in srgb,var(--cpu1) 8%,var(--card))}.total.bad .note{color:var(--cpu1)}
+.quick{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+.cpu-row{grid-column:1 / -1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 150px;gap:8px clamp(8px,2.2vw,22px)}
+.cpu-row .cell{border-radius:8px;background:var(--soft);text-align:center;padding:6px 2px;font-size:16px;font-variant-numeric:tabular-nums;max-width:120px;width:100%;justify-self:center}
+.cpu-row .who{grid-column:6;font-weight:700;font-size:14px;align-self:center}
+.cpus{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 150px;gap:8px clamp(8px,2.2vw,22px);margin-top:14px}
+.cpus .cap{grid-column:1 / -1;font-size:12.5px;color:var(--ink-2);margin-bottom:-2px}
+.msg{text-align:center;font-size:16px;font-weight:500;min-height:26px;margin:18px 0 6px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:12px;height:12px;border:2px solid var(--rule);border-radius:3px;margin-right:5px;vertical-align:-2px}
+.btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;max-width:700px;margin:18px auto 0}
+.speed{display:flex;align-items:center;gap:10px;max-width:700px;margin:12px auto 0;font-size:13px;color:var(--ink-2)}
+.speed input{flex:1}
+.err{text-align:center;min-height:20px;margin-top:8px}
+.record{max-width:700px;margin:20px auto 0;border-top:2px solid var(--rule);padding-top:16px}
+@media (max-width:640px){
+  .arena,.cpus,.cpu-row{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .total{grid-column:1 / -1;grid-row:auto;flex-direction:row;flex-wrap:wrap;justify-content:space-between;align-items:center;text-align:left}
+  .total .big{font-size:26px}
+  .cpu-row .who{grid-column:1 / -1;order:-1;font-size:13px;margin-bottom:-4px}
+  .qty input{font-size:18px}
+  .steps button{font-size:16px;padding:5px 0}
+}

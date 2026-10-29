@@ -1,0 +1,78 @@
+/* Line-art board game look, taken from the castle artwork: thick ink outlines, white fills, flat player colors. */
+:root{
+  --bg:#F4F4F1;--card:#FFFFFF;--ink:#111318;--ink-2:#4A4F5C;--rule:#111318;--soft:#ECECE7;
+  --you:#1F5FB8;--cpu1:#C62F3B;--cpu2:#1E8A6E;--cpu3:#7A4CB0;--tie:#D29B12;--idle:#FFFFFF;
+  --stroke:3px;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  color-scheme:light;box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1015;--card:#171A21;--ink:#ECEDEF;--ink-2:#A6ABB7;--rule:#ECEDEF;--soft:#22262F;
+  --you:#5E97E6;--cpu1:#EA6370;--cpu2:#4CC3A0;--cpu3:#AE8BE0;--tie:#E8BC4A;--idle:#171A21;color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0E1015;--card:#171A21;--ink:#ECEDEF;--ink-2:#A6ABB7;--rule:#ECEDEF;--soft:#22262F;
+  --you:#5E97E6;--cpu1:#EA6370;--cpu2:#4CC3A0;--cpu3:#AE8BE0;--tie:#E8BC4A;--idle:#171A21;color-scheme:dark;}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 20px 64px}
+.nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:26px}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--display);font-weight:900;font-size:18px;margin-right:auto;color:var(--ink);text-decoration:none}
+.brand svg{width:26px;height:32px}
+.nav a.tab{color:var(--ink);text-decoration:none;font-size:14px;padding:6px 14px;border:2px solid transparent;border-radius:999px}
+.nav a.tab[aria-current="page"]{border-color:var(--rule)}
+.nav a.tab:hover{background:var(--soft)}
+h1{font-family:var(--display);font-weight:900;font-size:clamp(30px,4.6vw,48px);line-height:1.12;margin:0 0 10px;letter-spacing:.01em}
+.lede{color:var(--ink-2);max-width:62ch;margin:0}
+.card{background:var(--card);border:var(--stroke) solid var(--rule);border-radius:14px;padding:20px}
+.card h2{font-family:var(--display);font-weight:900;font-size:21px;margin:0 0 12px}
+.card h3{font-size:14px;font-weight:700;margin:18px 0 6px}
+.hint{font-size:13px;color:var(--ink-2);margin:4px 0 0}
+.err{font-size:13px;color:var(--cpu1);margin:4px 0 0}
+.empty{color:var(--ink-2);font-size:14px}
+
+/* castle component */
+.castle{display:block;width:100%;height:auto;overflow:visible}
+.castle-body{fill:var(--idle);transition:fill .25s}
+.castle-line{fill:none;stroke:var(--rule);stroke-width:4.6;stroke-linejoin:round}
+.castle-ink{fill:var(--rule)}
+.castle-pole{stroke:var(--rule);stroke-width:3.2;stroke-linecap:round}
+.castle-flag{fill:var(--rule);stroke:var(--rule);stroke-width:1.6;stroke-linejoin:round}
+.castle-level{transition:y .35s,height .35s}
+
+/* controls */
+.seg{display:grid;grid-template-columns:1fr 1fr;border:2px solid var(--rule);border-radius:999px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--ink);padding:9px 6px;font:inherit;font-size:14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+.btn{border:2px solid var(--rule);background:var(--card);color:var(--ink);padding:10px 18px;font:inherit;font-size:15px;font-weight:500;border-radius:10px;cursor:pointer}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--ink);color:var(--card)}
+.btn.primary:hover{opacity:.88}
+.btn[aria-disabled="true"],.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.small{padding:6px 12px;font-size:13.5px;border-radius:8px}
+input[type=range]{width:100%;accent-color:var(--ink)}
+input[type=number],textarea,select{width:100%;background:var(--card);color:var(--ink);border:2px solid var(--rule);border-radius:8px;padding:7px 10px;font:inherit;font-size:14px;font-variant-numeric:tabular-nums}
+textarea{min-height:80px;resize:vertical}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--tie);outline-offset:2px}
+
+/* the "human vs random" dial */
+.dial{margin:6px 0 2px}
+.dial-ends{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.dial-read{font-family:var(--display);font-weight:900;font-size:20px;margin:2px 0 4px}
+.dial-read small{font-family:var(--sans);font-weight:400;font-size:13px;color:var(--ink-2)}
+.field{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;gap:8px;margin:4px 0}
+.field label{grid-column:1/-1;font-size:13.5px;margin-bottom:-4px}
+.field output{font-size:13px;text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--soft);white-space:nowrap}
+th{font-weight:500;color:var(--ink-2);font-size:13px;border-bottom:2px solid var(--rule)}
+.scroll{overflow-x:auto}
+.stat{border-left:4px solid var(--ink);padding:2px 0 2px 12px}
+.stat span{display:block;font-size:13px;color:var(--ink-2)}
+.stat b{font-family:var(--display);font-size:28px;font-weight:900;font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+details summary{cursor:pointer;font-weight:700;font-size:14px}
+@media (prefers-reduced-motion:reduce){.castle-body,.castle-level{transition:none}}

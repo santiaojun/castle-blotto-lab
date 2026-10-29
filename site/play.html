@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Castle Siege: Play vs CPU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=IBM+Plex+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/play.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav" aria-label="Pages">
+    <a class="brand" href="index.html"><span id="brandIcon" aria-hidden="true"></span>Castle Blotto Lab</a>
+    <a class="tab" href="index.html">Lab</a>
+    <a class="tab" href="play.html" aria-current="page">Play vs CPU</a>
+  </nav>
+
+  <div class="board">
+    <header class="head">
+      <h1>Castle Siege</h1>
+      <p class="lede">Each flag is worth one point: the castles are worth 1 to 5, 15 in total. Head to head, 8 points wins the war. After every attack each castle takes the winner’s color, and the computer picks a new allocation every battle.</p>
+    </header>
+
+    <section class="card">
+      <div class="settings">
+        <div><label class="lab" for="modeSel">Game</label>
+          <select id="modeSel"><option value="1">Game 1: you vs 1 CPU</option><option value="3">Game 2: you vs 3 CPUs (four-way)</option></select></div>
+        <div><label class="lab" for="human">Who is the computer?</label>
+          <div class="dial-read" id="humanRead" style="font-size:17px"></div>
+          <input type="range" id="human" min="0" max="100" step="5" value="70">
+          <div class="dial-ends"><span>All random</span><span>All human-like</span></div>
+          <p class="hint" id="humanSrc"></p></div>
+        <div><label class="lab" for="variation">Variation when copying (max soldiers moved)</label>
+          <div class="field-row"><input type="range" id="variation" min="0" max="20" step="1" value="4"><output id="variationO">4</output></div></div>
+      </div>
+
+      <div class="arena" id="arena" aria-label="Your allocation">
+        <div class="total" id="total" aria-live="polite">
+          <span class="lbl">Allocated</span>
+          <span class="big" id="sum">0<small> / 100</small></span>
+          <span class="note" id="sumNote"></span>
+          <div class="quick"><button class="btn small" id="randBtn">Random</button><button class="btn small" id="evenBtn">Even</button></div>
+        </div>
+      </div>
+      <div class="cpus" id="cpus"></div>
+      <div class="msg" id="msg" role="status">Set your troops under each castle, then press “Attack once”.</div>
+      <div class="legend" id="legend"></div>
+
+      <div class="btns">
+        <button class="btn primary" id="oneBtn">Attack once</button>
+        <button class="btn" id="autoBtn">Keep attacking</button>
+        <button class="btn" id="fastBtn">Run 1,000</button>
+        <button class="btn" id="resetBtn">Reset record</button>
+      </div>
+      <div class="speed"><label for="spd">Attack speed</label><input type="range" id="spd" min="1" max="20" step="1" value="6"><span id="spdO">6 per second</span></div>
+      <div class="err" id="err" role="alert"></div>
+      <div class="record stats" id="record"></div>
+    </section>
+  </div>
+</div>
+
+<script type="module">
+import * as E from './js/engine.js';
+import { castleSVG } from './js/castle.js';
+const $ = (id) => document.getElementById(id);
+const NAMES = ['You', 'CPU', 'CPU B', 'CPU C'], COLORS = ['var(--you)', 'var(--cpu1)', 'var(--cpu2)', 'var(--cpu3)'];
+let nOpp = 1, timer = null, rec, RIDDLER = [], model;
+
+$('brandIcon').innerHTML = castleSVG({ flags: 1 });
+let fills = null;
+const START = [3, 12, 22, 28, 35];
+function buildArena() {
+  const prev = E.VALUES.map((_, i) => ($('y' + i) ? $('y' + i).value : START[i]));
+  const total = $('total');
+  $('arena').innerHTML = E.VALUES.map((v, i) => `<div class="slot"><div id="cs${i}"></div><span class="v">Castle ${v} (${v} pt${v > 1 ? 's' : ''})</span>
+    <div class="qty"><input id="y${i}" type="number" inputmode="numeric" min="0" max="100" step="1" value="${prev[i]}" aria-label="Troops for castle ${v}">
+    <div class="steps"><button data-i="${i}" data-d="-1" aria-label="Castle ${v} minus 1">−</button><button data-i="${i}" data-d="1" aria-label="Castle ${v} plus 1">+</button></div></div></div>`).join('');
+  $('arena').appendChild(total);
+  E.VALUES.forEach((_, i) => $('y' + i).addEventListener('input', checkMine));
+  // tap = ±1, hold = keep stepping
+  $('arena').querySelectorAll('.steps button').forEach((b) => {
+    let t = null, r = null;
+    const step = () => { const inp = $('y' + b.dataset.i); const v = Math.max(0, Math.min(100, (parseInt(inp.value, 10) || 0) + +b.dataset.d)); inp.value = v; checkMine(); };
+    const stop = () => { clearTimeout(t); clearInterval(r); t = r = null; };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); step(); t = setTimeout(() => { r = setInterval(step, 60); }, 350); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, stop));
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); step(); } });
+  });
+  paintCastles(fills);
+  checkMine();
+}
+function paintCastles(f) { fills = f; E.VALUES.forEach((v, i) => { $('cs' + i).innerHTML = castleSVG({ flags: v, fill: f ? f[i] : null, label: `Castle ${v}, ${v} point${v > 1 ? 's' : ''}` }); }); }
+function buildCpus() {
+  let h = '<span class="cap">Computer troops this battle</span>';
+  for (let p = 1; p <= nOpp; p++) h += `<div class="cpu-row">${E.VALUES.map((_, i) => `<span class="cell" id="o${p}_${i}">—</span>`).join('')}<span class="who" style="color:${COLORS[p]}">${NAMES[p]}</span></div>`;
+  $('cpus').innerHTML = h;
+  $('legend').innerHTML = [0, ...Array.from({ length: nOpp }, (_, k) => k + 1)].map((p) => `<span><i style="background:${COLORS[p]}"></i>${NAMES[p]}</span>`).join('') + '<span><i style="background:var(--tie)"></i>Tie</span>';
+}
+const mine = () => E.VALUES.map((_, i) => Number($('y' + i).value));
+function checkMine() {
+  const a = mine(), ints = a.every((x) => Number.isInteger(x) && x >= 0), s = ints ? a.reduce((p, q) => p + q, 0) : NaN, ok = ints && s === 100;
+  $('sum').innerHTML = `${Number.isNaN(s) ? '?' : s}<small> / 100</small>`;
+  $('sumNote').textContent = !ints ? 'Whole numbers 0–100 only' : s > 100 ? `${s - 100} too many` : s < 100 ? `${100 - s} left to place` : 'Exactly 100';
+  $('total').classList.toggle('ok', ok); $('total').classList.toggle('bad', !ok);
+  return ok;
+}
+$('randBtn').onclick = () => { E.randomAlloc(Math.random).forEach((x, i) => { $('y' + i).value = x; }); checkMine(); };
+$('evenBtn').onclick = () => { E.VALUES.forEach((_, i) => { $('y' + i).value = 20; }); checkMine(); };
+
+function rebuildModel() {
+  const h = +$('human').value;
+  model = E.makeOpponentModel({ humanShare: h / 100, variation: +$('variation').value, pools: { riddler: RIDDLER } });
+  $('humanRead').innerHTML = `${h}% human-like <small>${100 - h}% random</small>`;
+  $('humanSrc').textContent = h === 0 ? '' : `Human-like side uses ${model.humanLabel}${model.useR ? ` (${RIDDLER.length.toLocaleString('en-US')} submissions)` : ''}.`;
+}
+['human', 'variation'].forEach((id) => $(id).addEventListener('input', () => {
+  if (id === 'variation') $('variationO').textContent = $('variation').value;
+  rebuildModel(); stopAuto(); resetRec(); $('msg').textContent = 'The computer changed how it plays, so the record was reset.';
+}));
+
+function resetRec() { rec = { n: 0, w: 0, d: 0, l: 0, pts: 0, place: [0, 0, 0, 0], pay: 0, first: 0 }; showRec(); }
+const pct = (x) => (Math.round(x * 1000) / 10).toFixed(1) + '%', f2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
+function showRec() {
+  const n = rec.n || 1, has = rec.n > 0;
+  $('record').innerHTML = nOpp === 1
+    ? `<div class="stat"><span>Record W-D-L</span><b>${rec.w}-${rec.d}-${rec.l}</b></div><div class="stat"><span>Your win rate</span><b>${has ? pct(rec.w / n) : '—'}</b></div><div class="stat"><span>CPU win rate</span><b>${has ? pct(rec.l / n) : '—'}</b></div><div class="stat"><span>Avg. castle points (max 15)</span><b>${has ? f2(rec.pts / n) : '—'}</b></div>`
+    : `<div class="stat"><span>Finishes 1st/2nd/3rd/4th</span><b>${rec.place.join('/')}</b></div><div class="stat"><span>Chance of 1st</span><b>${has ? pct(rec.first / n) : '—'}</b></div><div class="stat"><span>Avg. placement points (max 9)</span><b>${has ? f2(rec.pay / n) : '—'}</b></div><div class="stat"><span>Battles</span><b>${rec.n}</b></div>`;
+}
+
+function attack(show = true) {
+  if (!checkMine()) { $('err').textContent = 'Your allocation must be five non-negative whole numbers that sum to exactly 100.'; stopAuto(); return false; }
+  $('err').textContent = '';
+  const players = [mine()];
+  for (let p = 0; p < nOpp; p++) players.push(E.agentFrom(model, Math.random));
+  const r = E.groupResult(players), me = r.places[0];
+  rec.n++; rec.pts += r.pts[0];
+  if (nOpp === 1) { if (r.pts[0] > r.pts[1] + E.EPS) rec.w++; else if (r.pts[0] < r.pts[1] - E.EPS) rec.l++; else rec.d++; }
+  else { rec.place[me.rank - 1]++; rec.pay += me.pay; rec.first += me.first; }
+  if (show) {
+    for (let p = 1; p <= nOpp; p++) E.VALUES.forEach((_, i) => { $(`o${p}_${i}`).textContent = players[p][i]; });
+    paintCastles(r.winners.map((w) => (w.length > 1 ? 'var(--tie)' : COLORS[w[0]])));
+    $('msg').textContent = nOpp === 1
+      ? (r.pts[0] > r.pts[1] + E.EPS ? `You won the war with ${f2(r.pts[0])} points.` : r.pts[0] < r.pts[1] - E.EPS ? `The computer won. You took ${f2(r.pts[0])} points.` : 'A draw: 7.5 points each.')
+      : `You took ${f2(r.pts[0])} points and finished ${['1st','2nd','3rd','4th'][me.rank - 1]}${me.tie ? ' (tied)' : ''}, worth ${f2(me.pay)} placement points.`;
+    showRec();
+  }
+  return true;
+}
+function stopAuto() { if (timer) { clearInterval(timer); timer = null; } $('autoBtn').textContent = 'Keep attacking'; }
+const startTimer = () => { timer = setInterval(() => attack(), 1000 / +$('spd').value); };
+$('autoBtn').onclick = () => { if (timer) { stopAuto(); return; } if (!attack()) return; $('autoBtn').textContent = 'Pause'; startTimer(); };
+$('spd').oninput = () => { $('spdO').textContent = `${$('spd').value} per second`; if (timer) { clearInterval(timer); startTimer(); } };
+$('oneBtn').onclick = () => { stopAuto(); attack(); };
+$('fastBtn').onclick = () => { stopAuto(); if (!attack()) return; for (let k = 0; k < 999; k++) attack(false); showRec(); $('msg').textContent = 'Played 1,000 battles. The castles show the first one.'; };
+$('resetBtn').onclick = () => { stopAuto(); resetRec(); paintCastles(null); $('msg').textContent = 'Record reset.'; };
+$('modeSel').onchange = () => { stopAuto(); nOpp = +$('modeSel').value; buildCpus(); resetRec(); paintCastles(null); $('msg').textContent = nOpp === 1 ? 'Head to head: 8 points wins.' : 'Four-way: ranked by castle points; 1st to 4th earn 9, 4, 2 and 0.'; };
+
+buildArena(); buildCpus(); rebuildModel(); resetRec();
+fetch('data/riddler.json', { cache: 'no-cache' }).then((r) => { if (!r.ok) throw 0; return r.json(); })
+  .then((j) => { RIDDLER = j.rounds.filter((r) => r.castles === 10).flatMap((r) => r.allocs5); rebuildModel(); })
+  .catch(() => {});
+</script>
+</body>
+</html>

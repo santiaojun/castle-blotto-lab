@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Castle Blotto Lab</title>
+<meta name="description" content="Colonel Blotto simulator: 5 castles, 100 soldiers, opponents that range from real Riddler submissions to random play.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,900&family=IBM+Plex+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/lab.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav" aria-label="Pages">
+    <a class="brand" href="index.html"><span id="brandIcon" aria-hidden="true"></span>Castle Blotto Lab</a>
+    <a class="tab" href="index.html" aria-current="page">Lab</a>
+    <a class="tab" href="play.html">Play vs CPU</a>
+  </nav>
+
+  <header class="hero">
+    <h1>Five castles, one hundred soldiers</h1>
+    <p class="lede">First decide who your opponents are: people who play like real puzzle solvers, or people who split their troops at random. The lab builds a thousand such opponents, lets them play each other and adapt, then finds the allocation with the highest expected score in each game.</p>
+  </header>
+
+  <section class="card stage" aria-label="Recommended allocation">
+    <div class="stage-cap"><span id="stageTitle">Run the simulation. The blue level in each castle will show the recommended troops.</span><strong id="stageArr"></strong></div>
+    <div class="towers" id="towers"></div>
+  </section>
+
+  <div class="layout" style="margin-top:22px">
+    <aside class="card" aria-label="Simulation settings">
+      <h2>Settings</h2>
+      <div class="seg" role="group" aria-label="Game">
+        <button id="g1btn" aria-pressed="true">Game 1: 1 vs 1</button>
+        <button id="g2btn" aria-pressed="false">Game 2: 4-way</button>
+      </div>
+      <p class="hint">One run computes both games; this switch only changes the view.</p>
+
+      <h3><label for="human">Who are the opponents?</label></h3>
+      <div class="dial">
+        <div class="dial-read" id="humanRead"></div>
+        <input type="range" id="human" min="0" max="100" step="5" value="70">
+        <div class="dial-ends"><span>All random</span><span>All human-like</span></div>
+        <p class="hint" id="humanSrc"></p>
+      </div>
+
+      <div class="field"><label for="variation">Variation when copying (max soldiers moved)</label><input type="range" id="variation" min="0" max="20" step="1" value="4"><output id="variationO">4</output></div>
+      <div class="field"><label for="gens">Adaptation (generations; 0 = no learning)</label><input type="range" id="gens" min="0" max="60" step="1" value="10"><output id="gensO">10</output></div>
+      <div class="row2">
+        <div><h3><label for="nAgents">Opponents</label></h3><input type="number" id="nAgents" min="100" max="3000" step="100" value="1000"></div>
+        <div><h3><label for="seed">Random seed</label></h3><input type="number" id="seed" min="1" max="99999" step="1" value="2026"></div>
+      </div>
+      <p class="hint">The seed only makes a run reproducible: same settings and seed, same result. Try other seeds to check that a conclusion holds.</p>
+
+      <h3>Real submissions (FiveThirtyEight Riddler)</h3>
+      <p class="hint" id="dataStatus">Loading…</p>
+      <div class="rounds" id="rounds"></div>
+      <div id="uploadBox" hidden>
+        <label class="hint" for="csvUp" style="display:block;margin:6px 0 4px">Upload castle-solutions*.csv (multiple allowed):</label>
+        <input type="file" id="csvUp" accept=".csv,text/csv" multiple>
+      </div>
+
+      <details style="margin-top:16px">
+        <summary>Advanced</summary>
+        <h3><label for="source">What “human-like” means</label></h3>
+        <select id="source">
+          <option value="auto">Auto: real data if loaded, otherwise synthetic</option>
+          <option value="riddler">Real data only</option>
+          <option value="synthetic">Synthetic archetypes only</option>
+          <option value="both">Half and half</option>
+        </select>
+        <h3>Synthetic archetype weights</h3>
+        <div id="mix"></div>
+        <h3><label for="customField">Your guesses about other players</label></h3>
+        <textarea id="customField" placeholder="One per line, e.g. 0,0,30,30,40"></textarea>
+        <p class="err" id="customErr"></p>
+      </details>
+
+      <h3><label for="cands">Your candidate allocations</label></h3>
+      <textarea id="cands">3,12,22,28,35
+1,1,35,0,63
+21,29,50,0,0
+20,20,20,20,20</textarea>
+      <p class="hint">Five whole numbers per line, summing to 100. They are compared with the optimizer’s answers.</p>
+      <p class="err" id="candErr"></p>
+
+      <button class="btn primary run" id="run">Run simulation</button>
+      <div class="prog" aria-hidden="true"><i id="bar"></i></div>
+      <div class="status" id="status" role="status"></div>
+    </aside>
+
+    <main class="main">
+      <section class="card" aria-labelledby="resH">
+        <h2 id="resH">Results</h2>
+        <div id="stats" class="stats"><p class="empty">Press “Run simulation” to start.</p></div>
+        <div class="scroll" id="candTable" style="margin-top:14px"></div>
+      </section>
+
+      <section class="card" aria-labelledby="dataH">
+        <h2 id="dataH">How real people split their troops</h2>
+        <p class="hint" style="margin:0 0 12px">Riddler games use 10 castles worth 1–10. Pairing them by value (1+2, 3+4, …, 9+10) gives 5 castles whose shares of the total (5.5%, 12.7%, 20.0%, 27.3%, 34.5%) are close to this game’s 1–5 points (6.7%, 13.3%, 20.0%, 26.7%, 33.3%). The population, year and rules still differ, so treat this as a reference, not a forecast.</p>
+        <div class="scroll"><div class="cmp" id="cmp"><p class="empty">Shown after data is loaded or uploaded.</p></div></div>
+      </section>
+
+      <section class="card" aria-labelledby="fieldH">
+        <h2 id="fieldH">The opposing field</h2>
+        <p class="hint" style="margin:0 0 12px">Each row is a castle; the horizontal axis is troops sent (0–100). Darker means more opponents chose that number. Black ticks mark the recommended allocation. This is the field after adaptation.</p>
+        <canvas id="heat" height="190" aria-label="Heat map of opponent allocations"></canvas>
+        <div class="legend"><span>0 troops</span><span>50</span><span>100 troops</span></div>
+        <div class="common" id="common"></div>
+      </section>
+
+      <section class="card" aria-labelledby="repH">
+        <h2 id="repH">Replay a random battle</h2>
+        <div class="tools">
+          <label for="repPick" class="hint" style="margin:0">Allocation:</label>
+          <select id="repPick"></select>
+          <button class="btn small" id="repBtn">Another battle</button>
+        </div>
+        <div class="scroll"><div id="replay" class="replay"><p class="empty">Available after a run.</p></div></div>
+      </section>
+
+      <section class="card method">
+        <details>
+          <summary>How it works</summary>
+          <p><b>Opponents.</b> Each opponent is drawn independently. A share set by the dial copies a human-like allocation (a real Riddler submission, or a synthetic archetype) and moves a few soldiers; the rest allocate uniformly at random. Mixing is done by player, never by averaging allocations, because averaging would erase real habits such as leaving a castle empty.</p>
+          <p><b>Adaptation.</b> Each generation, opponents play each other under the game’s own rules. The bottom 20% copy someone from the top 30% and mutate; one in ten replacements is a fresh draw to keep diversity. The two games evolve separate fields because they reward different things.</p>
+          <p><b>Game 1 (exact).</b> Average castle points against a field can be computed castle by castle, so dynamic programming finds the exact best allocation among all of them.</p>
+          <p><b>Game 2 (search).</b> Placement depends on all four totals at once, so it cannot be split. Simulated annealing searches on 2,500 sampled opponent triples, then a local polish; every candidate is re-scored on 20,000 fresh triples to avoid overfitting the sample.</p>
+          <p><b>Limits.</b> Nobody knows how real applicants will play. Random opponents are weak, so high win rates at that end of the dial mean little. The allocations worth submitting are the ones that rank well across many settings and seeds.</p>
+        </details>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script type="module">
+import * as E from './js/engine.js';
+import { castleSVG } from './js/castle.js';
+const $ = (id) => document.getElementById(id);
+const COLORS = ['var(--you)', 'var(--cpu1)', 'var(--cpu2)', 'var(--cpu3)'];
+const G1 = 'Game 1 optimum', G2 = 'Game 2 optimum', MINE = 'Your candidate';
+let game = 1, results = null, dataRounds = [];
+
+$('brandIcon').innerHTML = castleSVG({ flags: 1 });
+
+E.ARCHETYPES.forEach((a) => {
+  const d = document.createElement('div'); d.className = 'field';
+  d.innerHTML = `<label for="w_${a.key}">${a.label}</label><input type="range" id="w_${a.key}" min="0" max="10" step="1" value="${a.weight}"><output>${a.weight}</output>`;
+  $('mix').appendChild(d);
+  const r = d.querySelector('input'); r.addEventListener('input', () => { d.querySelector('output').textContent = r.value; });
+});
+['variation', 'gens'].forEach((id) => $(id).addEventListener('input', () => { $(id + 'O').textContent = $(id).value; }));
+function updateDial() {
+  const h = +$('human').value;
+  $('humanRead').innerHTML = `${h}% human-like <small>${100 - h}% random</small>`;
+  const m = E.makeOpponentModel({ source: $('source').value, pools: { riddler: riddlerPool() } });
+  $('humanSrc').textContent = h === 0 ? 'The human-like side is not used.' : `Human-like side uses ${m.humanLabel}${m.useR ? ` (${riddlerPool().length.toLocaleString('en-US')} submissions)` : ''}.`;
+}
+$('human').addEventListener('input', updateDial); $('source').addEventListener('change', updateDial);
+try { const s = JSON.parse(localStorage.getItem('castleLabEn') || '{}'); if (s.cands) $('cands').value = s.cands; if (s.custom) $('customField').value = s.custom; } catch (e) {}
+const save = () => { try { localStorage.setItem('castleLabEn', JSON.stringify({ cands: $('cands').value, custom: $('customField').value })); } catch (e) {} };
+
+function riddlerPool() { return dataRounds.filter((r) => r.on).flatMap((r) => r.allocs5); }
+function renderRounds() {
+  $('rounds').innerHTML = dataRounds.map((r, i) => `<label><input type="checkbox" data-i="${i}" ${r.on ? 'checked' : ''}><span>${r.title}<br><span class="hint" style="margin:0">${r.valid.toLocaleString('en-US')} valid submissions, ${r.castles} castles</span></span></label>`).join('');
+  $('rounds').querySelectorAll('input').forEach((cb) => cb.addEventListener('change', () => { dataRounds[+cb.dataset.i].on = cb.checked; renderCmp(); updateDial(); }));
+  renderCmp(); updateDial();
+}
+function renderCmp() {
+  const pool = riddlerPool();
+  if (!pool.length) { $('cmp').innerHTML = '<p class="empty">Shown after data is loaded or uploaded.</p>'; return; }
+  const st = E.datasetStats(pool), pct = (x) => Math.round(x * 100) + '%';
+  $('cmp').innerHTML = `<span class="rh"></span>${E.VALUES.map((v) => `<span class="ch">Castle ${v}</span>`).join('')}`
+    + `<span class="rh">Avg. troops (real)</span>${st.avg.map((x) => `<span>${x.toFixed(1)}</span>`).join('')}`
+    + `<span class="rh">Proportional</span>${[6.7, 13.3, 20, 26.7, 33.3].map((x) => `<span>${x}</span>`).join('')}`
+    + `<span class="rh">Left empty</span>${st.zero.map((x) => `<span>${pct(x)}</span>`).join('')}`
+    + `<p class="hint" style="grid-column:1/-1">Based on ${st.n.toLocaleString('en-US')} real submissions after mapping to 5 castles.</p>`;
+}
+async function loadData() {
+  try {
+    const res = await fetch('data/riddler.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(res.status);
+    const j = await res.json();
+    dataRounds = j.rounds.map((r, i) => ({ ...r, on: r.castles === 10 && i < 3 }));
+    $('dataStatus').textContent = `Loaded ${dataRounds.length} rounds of real submissions. Choose which rounds to use.`;
+  } catch (e) {
+    $('dataStatus').textContent = 'No preprocessed data found. Download the CSV files from fivethirtyeight/data (riddler-castles) and upload them here. Without data, the human-like side uses synthetic archetypes.';
+  }
+  $('uploadBox').hidden = false;
+  renderRounds();
+}
+$('csvUp').addEventListener('change', async (ev) => {
+  for (const f of ev.target.files) {
+    const p = E.parseRiddler(await f.text());
+    if (!p.castles || !p.allocs.length) { $('dataStatus').textContent = `${f.name}: no “Castle” columns or no valid rows.`; continue; }
+    dataRounds.push({ file: f.name, title: `${f.name} (uploaded)`, castles: p.castles, valid: p.allocs.length, invalid: p.invalid, allocs5: p.allocs.map(E.mapToFive), on: true });
+    $('dataStatus').textContent = `Read ${f.name}: ${p.allocs.length} valid, ${p.invalid} invalid (for example, not summing to 100).`;
+  }
+  renderRounds();
+});
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const setProg = (p, msg) => { $('bar').style.width = Math.round(p * 100) + '%'; if (msg) $('status').textContent = msg; };
+async function evolve(F, n, gens, mode, model, rng, p0, p1, label) {
+  for (let g = 0; g < gens; g++) {
+    E.evolveGeneration(F, n, mode, model, rng);
+    setProg(p0 + ((p1 - p0) * (g + 1)) / gens, `${label}: generation ${g + 1} of ${gens}`);
+    if (g % 2 === 1) await tick();
+  }
+}
+async function run() {
+  save();
+  const c = E.parseAllocLines($('cands').value), cf = E.parseAllocLines($('customField').value);
+  const badMsg = (b) => (b.length ? `Line ${b.join(', ')} is invalid: use five non-negative whole numbers that sum to 100.` : '');
+  $('candErr').textContent = badMsg(c.bad); $('customErr').textContent = badMsg(cf.bad);
+  const n = Math.min(3000, Math.max(100, Math.round(+$('nAgents').value || 1000)));
+  const gens = +$('gens').value, seed = Math.round(+$('seed').value) || 1, human = +$('human').value / 100;
+  const weights = Object.fromEntries(E.ARCHETYPES.map((a) => [a.key, +$('w_' + a.key).value]));
+  $('run').disabled = true;
+  const rng = E.mulberry32(seed);
+  setProg(0, 'Building opponents'); await tick();
+  const { F, info } = E.makeField({ n, rng, humanShare: human, variation: +$('variation').value, source: $('source').value, weights, pools: { custom: cf.ok, riddler: riddlerPool() } });
+  const F1 = F.slice(), F2 = F.slice();
+  await evolve(F1, n, gens, 1, info, rng, 0.02, 0.3, 'Game 1 field adapting');
+  await evolve(F2, n, gens, 2, info, rng, 0.3, 0.55, 'Game 2 field adapting');
+  const H1 = E.histogram(F1, n), b1 = E.g1BestResponse(H1);
+  const it = E.g2Anneal(F2, n, [b1, [1, 1, 35, 0, 63], [0, 0, 34, 0, 66], [21, 29, 50, 0, 0], [0, 0, 0, 50, 50], ...c.ok], rng);
+  let step = it.next();
+  while (!step.done) { setProg(0.55 + 0.42 * step.value, 'Searching Game 2'); await tick(); step = it.next(); }
+  const b2 = step.value;
+  setProg(0.98, 'Re-scoring on fresh samples');
+  const test = E.sampleTriples(20000, n, rng), seen = new Set(), list = [];
+  [{ name: G1, a: b1 }, { name: G2, a: b2 }, ...c.ok.map((a) => ({ name: MINE, a }))].forEach((x) => { const k = x.a.join(','); if (!seen.has(k)) { seen.add(k); list.push(x); } });
+  results = {
+    b1, b2, n, F1, F2,
+    r1: list.map((x) => ({ ...x, avg: E.g1Expected(x.a, H1), win: E.g1WinRate(x.a, F1, n) })),
+    r2: list.map((x) => ({ ...x, ...E.g2Evaluate(x.a, F2, test) })),
+  };
+  setProg(1, `Done: ${n.toLocaleString('en-US')} opponents, ${Math.round(human * 100)}% human-like (${info.humanLabel}), ${gens} generations, seed ${seed}.`);
+  $('run').disabled = false;
+  render();
+}
+
+function drawTowers(a, title) {
+  $('stageTitle').textContent = title; $('stageArr').textContent = a ? a.join(' / ') : '';
+  $('towers').innerHTML = E.VALUES.map((v, i) => `<div class="tower">${castleSVG({ flags: v, level: a ? a[i] / 100 : null, label: `Castle ${v}, ${v} point${v > 1 ? 's' : ''}${a ? `, ${a[i]} troops` : ''}` })}<div class="n">${a ? a[i] : '—'}</div><div class="v">${v} pt${v > 1 ? 's' : ''}</div></div>`).join('');
+}
+const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2), pct = (x) => (Math.round(x * 1000) / 10).toFixed(1) + '%';
+function render() {
+  $('g1btn').setAttribute('aria-pressed', game === 1); $('g2btn').setAttribute('aria-pressed', game === 2);
+  if (!results) { drawTowers(null, 'Run the simulation. The blue level in each castle will show the recommended troops.'); return; }
+  const R = results;
+  if (game === 1) {
+    drawTowers(R.b1, 'Game 1 recommendation (blue level = share of 100 troops)');
+    const top = R.r1.find((x) => x.name === G1);
+    $('stats').innerHTML = `<div class="stat"><span>Average castle points per match (max 15)</span><b>${f2(top.avg)}</b></div><div class="stat"><span>Head-to-head win rate</span><b>${pct(top.win)}</b></div>`;
+    $('candTable').innerHTML = `<table><thead><tr><th>Allocation</th><th>Source</th><th>Avg. castle points</th><th>Win rate</th></tr></thead><tbody>${R.r1.slice().sort((a, b) => b.avg - a.avg).map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td>${x.a.join(' / ')}</td><td>${x.name}</td><td>${f2(x.avg)}</td><td>${pct(x.win)}</td></tr>`).join('')}</tbody></table><p class="hint">Sorted by average castle points, which is how Game 1 is scored. Ties count as half a win.</p>`;
+  } else {
+    drawTowers(R.b2, 'Game 2 recommendation (blue level = share of 100 troops)');
+    const top = R.r2.find((x) => x.name === G2);
+    $('stats').innerHTML = `<div class="stat"><span>Expected placement points (max 9)</span><b>${f2(top.pay)}</b></div><div class="stat"><span>Chance of finishing first</span><b>${pct(top.first)}</b></div>`;
+    $('candTable').innerHTML = `<table><thead><tr><th>Allocation</th><th>Source</th><th>Expected placement points</th><th>P(first)</th></tr></thead><tbody>${R.r2.slice().sort((a, b) => b.pay - a.pay).map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td>${x.a.join(' / ')}</td><td>${x.name}</td><td>${f2(x.pay)}</td><td>${pct(x.first)}</td></tr>`).join('')}</tbody></table><p class="hint">Scored on 20,000 fresh groups of four. A shared first place is split among the tied players.</p>`;
+  }
+  drawHeat(); drawCommon(); fillPick(); replay();
+}
+function drawHeat() {
+  const R = results, F = game === 1 ? R.F1 : R.F2, H = E.histogram(F, R.n);
+  const cv = $('heat'), dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 600, Hh = 190;
+  cv.width = W * dpr; cv.height = Hh * dpr; cv.style.height = Hh + 'px';
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const cs = getComputedStyle(document.documentElement), get = (v) => cs.getPropertyValue(v).trim();
+  const lw = 62, rowH = 34, cw = (W - lw) / 101;
+  ctx.fillStyle = get('--soft'); ctx.fillRect(lw, 0, W - lw, rowH * 5 + 10);
+  ctx.font = '12px ' + get('--sans');
+  for (let c = 0; c < 5; c++) {
+    let mx = 0; for (let x = 0; x <= 100; x++) mx = Math.max(mx, H.h[c * 101 + x]);
+    ctx.fillStyle = get('--ink-2'); ctx.fillText(`Castle ${c + 1}`, 4, c * rowH + rowH / 2 + 9);
+    ctx.fillStyle = get('--you');
+    for (let x = 0; x <= 100; x++) { const v = H.h[c * 101 + x]; if (!v) continue; ctx.globalAlpha = 0.15 + 0.85 * Math.sqrt(v / mx); ctx.fillRect(lw + x * cw, c * rowH + 5, Math.max(1, cw + 0.3), rowH - 4); }
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = get('--ink'); ctx.lineWidth = 2.5;
+  (game === 1 ? R.b1 : R.b2).forEach((x, c) => { const px = lw + x * cw + cw / 2; ctx.beginPath(); ctx.moveTo(px, c * rowH + 3); ctx.lineTo(px, c * rowH + rowH + 3); ctx.stroke(); });
+}
+function drawCommon() {
+  const R = results, F = game === 1 ? R.F1 : R.F2, m = new Map();
+  for (let i = 0; i < R.n; i++) { const k = Array.from(F.subarray(i * 5, i * 5 + 5)).join('/'); m.set(k, (m.get(k) || 0) + 1); }
+  $('common').innerHTML = '<span class="hint" style="width:100%;margin:0">Most common allocations in the field:</span>' + [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `<span class="chip">${k} (${v})</span>`).join('');
+}
+function fillPick() {
+  const list = game === 1 ? results.r1 : results.r2, sel = $('repPick');
+  sel.innerHTML = list.map((x, i) => `<option value="${i}">${x.a.join(' / ')} (${x.name})</option>`).join('');
+  sel.value = String(list.findIndex((x) => x.name === (game === 1 ? G1 : G2)));
+}
+function replay() {
+  const R = results; if (!R) return;
+  const list = game === 1 ? R.r1 : R.r2, me = list[+$('repPick').value || 0].a, F = game === 1 ? R.F1 : R.F2;
+  const pick = () => { const i = Math.floor(Math.random() * R.n); return Array.from(F.subarray(i * 5, i * 5 + 5)); };
+  const players = [me, ...(game === 1 ? [pick()] : [pick(), pick(), pick()])];
+  const names = game === 1 ? ['You', 'Opponent'] : ['You', 'Opponent A', 'Opponent B', 'Opponent C'];
+  const g = E.groupResult(players), ord = (r) => r + (['st', 'nd', 'rd'][r - 1] || 'th');
+  let h = `<div class="h"><span></span>${E.VALUES.map((v) => `<span>Castle ${v} (${v} pt${v > 1 ? 's' : ''})</span>`).join('')}<span>Points</span><span>${game === 1 ? 'Result' : 'Placement'}</span></div>`;
+  players.forEach((p, i) => {
+    const res = game === 1 ? (i === 0 ? (g.pts[0] > g.pts[1] + E.EPS ? 'You win' : g.pts[0] < g.pts[1] - E.EPS ? 'You lose' : 'Draw') : '') : `${ord(g.places[i].rank)}${g.places[i].tie ? ' (tied)' : ''}, ${f2(g.places[i].pay)}`;
+    h += `<div><span class="${i === 0 ? 'me' : ''}" style="color:${COLORS[i]}">${names[i]}</span>${p.map((x, c) => { const w = g.winners[c]; const st = w.includes(i) ? (w.length > 1 ? 'background:var(--tie);color:#fff' : `background:${COLORS[i]};color:#fff`) : ''; return `<span class="cell" style="${st}">${x}</span>`; }).join('')}<span class="cell plain">${f2(g.pts[i])}</span><span style="font-size:13px">${res}</span></div>`;
+  });
+  $('replay').innerHTML = h + '<p class="hint">A filled cell means that player took the castle; gold means a tie and the points are split.</p>';
+}
+
+$('g1btn').onclick = () => { game = 1; render(); };
+$('g2btn').onclick = () => { game = 2; render(); };
+$('run').onclick = () => { run().catch((e) => { $('status').textContent = 'Something went wrong: ' + e.message; $('run').disabled = false; }); };
+$('repBtn').onclick = replay; $('repPick').onchange = replay;
+window.addEventListener('resize', () => { if (results) drawHeat(); });
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (results) drawHeat(); }); } catch (e) {}
+updateDial(); render(); loadData();
+</script>
+</body>
+</html>
