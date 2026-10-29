@@ -39,3 +39,12 @@ canvas{width:100%;display:block;border-radius:8px}
 .cell.plain{border-color:transparent;background:var(--soft)}
 .me{font-weight:700}
 .method p{max-width:70ch;margin:10px 0}
+.rob-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.rob-grid label{display:block;font-size:13px;color:var(--ink-2);margin-bottom:4px}
+.rob-grid input{width:100%;background:var(--card);color:var(--ink);border:2px solid var(--rule);border-radius:8px;padding:7px 10px;font:inherit;font-size:14px}
+.check{display:flex;gap:8px;align-items:center;font-size:13.5px;margin-top:10px}
+.check input{accent-color:var(--ink)}
+.rob-sum{border:2px solid var(--rule);border-radius:10px;padding:10px 14px;margin:14px 0 6px;background:var(--soft)}
+.rob-sum p{margin:4px 0}
+td.hl{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+#robRun{width:100%}

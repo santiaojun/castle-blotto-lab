@@ -92,3 +92,18 @@ test('opponent model: humanShare 0 is all random, 1 is all human-like', () => {
   const synth = E.makeOpponentModel({ humanShare: 1, variation: 0, pools: {} });
   assert.equal(synth.humanLabel, 'synthetic archetypes');
 });
+
+test('robustnessSweep scores every candidate in every scenario', () => {
+  const it = E.robustnessSweep({ humans: [100], gensList: [0, 1], seeds: [1], n: 200, candidates: [[20, 20, 20, 20, 20]], testGroups: 500, annealIters: 100 });
+  let st = it.next();
+  while (!st.done) st = it.next();
+  const { scenarios, rows } = st.value;
+  assert.equal(scenarios.length, 2);
+  assert.ok(rows.some((r) => r.yours));
+  for (const r of rows) {
+    assert.ok(r.g1.meanRegret >= 0 && r.g2.meanRegret >= -1e-9);
+    assert.ok(r.g1.meanRank >= 1);
+  }
+  // the scenario-optimal Game 1 allocation has zero regret in its own scenario, so some row has small mean regret
+  assert.ok(Math.min(...rows.map((r) => r.g1.meanRegret)) < 1);
+});

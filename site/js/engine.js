@@ -379,3 +379,71 @@ export function datasetStats(allocs) {
   });
   return { n: allocs.length, avg, zero, roundShare: cells ? round / cells : 0 };
 }
+
+// ---------- robustness check ----------
+// Runs every combination of human share x adaptation x seed. In each scenario it finds the Game 1 and
+// Game 2 optima, then scores every candidate (yours + every scenario's optima) in every scenario.
+// "Regret" = best score among candidates in that scenario minus this candidate's score (0 = best there).
+// Generator: yields progress in [0,1]; returns { scenarios, rows }.
+export function* robustnessSweep({
+  humans = [50, 70, 100], gensList = [0, 3, 10], seeds = [1, 2, 3], n = 1000, variation = 4,
+  source = 'auto', weights, pools = {}, candidates = [], includeOptima = true,
+  testGroups = 10000, annealIters = 1200,
+} = {}) {
+  const scen = [];
+  for (const h of humans) for (const g of gensList) for (const s of seeds) scen.push({ human: h, gens: g, seed: s });
+  const cand = new Map();
+  const add = (a, tag) => {
+    const k = a.join(',');
+    if (!cand.has(k)) cand.set(k, { a: a.slice(), yours: false, g1opt: 0, g2opt: 0 });
+    const c = cand.get(k);
+    if (tag === 'yours') c.yours = true; else c[tag]++;
+  };
+  candidates.forEach((a) => add(a, 'yours'));
+  const runs = [];
+  for (let i = 0; i < scen.length; i++) {
+    const sc = scen[i], rng = mulberry32(sc.seed * 1000003 + sc.human * 101 + sc.gens);
+    const { F, info } = makeField({ n, rng, humanShare: sc.human / 100, variation, source, weights, pools });
+    const F1 = F.slice(), F2 = F.slice();
+    for (let g = 0; g < sc.gens; g++) { evolveGeneration(F1, n, 1, info, rng); evolveGeneration(F2, n, 2, info, rng); }
+    const H1 = histogram(F1, n), b1 = g1BestResponse(H1);
+    const it = g2Anneal(F2, n, [b1, ...candidates], rng, { iters: annealIters });
+    let st = it.next();
+    while (!st.done) { yield (0.85 * (i + st.value)) / scen.length; st = it.next(); }
+    const b2 = st.value;
+    if (includeOptima) { add(b1, 'g1opt'); add(b2, 'g2opt'); }
+    runs.push({ sc, H1, F2, T: sampleTriples(testGroups, n, rng) });
+    yield (0.85 * (i + 1)) / scen.length;
+  }
+  const list = [...cand.values()];
+  list.forEach((c) => { c.s1 = []; c.s2 = []; c.f2 = []; });
+  for (let r = 0; r < runs.length; r++) {
+    const run = runs[r];
+    list.forEach((c) => { c.s1.push(g1Expected(c.a, run.H1)); const e = g2Evaluate(c.a, run.F2, run.T); c.s2.push(e.pay); c.f2.push(e.first); });
+    yield 0.85 + (0.15 * (r + 1)) / runs.length;
+  }
+  const summarize = (key) => {
+    const S = runs.length, best = [], ranks = list.map(() => []);
+    for (let r = 0; r < S; r++) {
+      const col = list.map((c) => c[key][r]);
+      best.push(Math.max(...col));
+      col.forEach((v, j) => { ranks[j].push(1 + col.filter((w) => w > v + 1e-9).length); });
+    }
+    return list.map((c, j) => {
+      const s = c[key], reg = s.map((v, r) => best[r] - v);
+      return {
+        mean: s.reduce((x, y) => x + y, 0) / S, worst: Math.min(...s),
+        meanRegret: reg.reduce((x, y) => x + y, 0) / S, maxRegret: Math.max(...reg),
+        meanRank: ranks[j].reduce((x, y) => x + y, 0) / S, top3: ranks[j].filter((x) => x <= 3).length / S,
+      };
+    });
+  };
+  const g1 = summarize('s1'), g2 = summarize('s2');
+  return {
+    scenarios: scen,
+    rows: list.map((c, j) => ({
+      a: c.a, yours: c.yours, g1opt: c.g1opt, g2opt: c.g2opt,
+      g1: g1[j], g2: { ...g2[j], meanFirst: c.f2.reduce((x, y) => x + y, 0) / runs.length },
+    })),
+  };
+}

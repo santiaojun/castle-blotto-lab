@@ -98,6 +98,21 @@
         <div class="scroll" id="candTable" style="margin-top:14px"></div>
       </section>
 
+      <section class="card" aria-labelledby="robH">
+        <h2 id="robH">Robustness check</h2>
+        <p class="hint" style="margin:0 0 12px">The best answer changes with your assumptions about other players. This runs every combination below, finds each scenario’s optimum, then scores your candidates and every scenario’s optimum in every scenario. Other settings (variation, opponents, data rounds, advanced options) come from the panel on the left.</p>
+        <div class="rob-grid">
+          <div><label for="robHuman">Human-like shares (%)</label><input id="robHuman" value="50, 70, 100"></div>
+          <div><label for="robGens">Adaptation generations</label><input id="robGens" value="0, 3, 10"></div>
+          <div><label for="robSeeds">Random seeds</label><input id="robSeeds" value="1, 2, 3"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="robOpt" checked> Also test every scenario’s optimum as a candidate</label>
+        <button class="btn primary" id="robRun" style="margin-top:12px">Run robustness check</button>
+        <div class="prog" aria-hidden="true"><i id="robBar"></i></div>
+        <div class="status" id="robStatus" role="status"></div>
+        <div id="robOut"></div>
+      </section>
+
       <section class="card" aria-labelledby="dataH">
         <h2 id="dataH">How real people split their troops</h2>
         <p class="hint" style="margin:0 0 12px">Riddler games use 10 castles worth 1–10. Pairing them by value (1+2, 3+4, …, 9+10) gives 5 castles whose shares of the total (5.5%, 12.7%, 20.0%, 27.3%, 34.5%) are close to this game’s 1–5 points (6.7%, 13.3%, 20.0%, 26.7%, 33.3%). The population, year and rules still differ, so treat this as a reference, not a forecast.</p>
@@ -309,6 +324,69 @@ function replay() {
   });
   $('replay').innerHTML = h + '<p class="hint">A filled cell means that player took the castle; gold means a tie and the points are split.</p>';
 }
+
+// ---------- robustness check ----------
+const nums = (id) => $(id).value.split(/[,\s]+/).filter(Boolean).map(Number).filter((x) => Number.isFinite(x));
+let robLast = null;
+async function runRobust() {
+  const humans = nums('robHuman').filter((x) => x >= 0 && x <= 100), gensList = nums('robGens').filter((x) => x >= 0 && x <= 60).map(Math.round), seeds = nums('robSeeds').map(Math.round);
+  if (!humans.length || !gensList.length || !seeds.length) { $('robStatus').textContent = 'Enter at least one value in each box.'; return; }
+  const c = E.parseAllocLines($('cands').value), cf = E.parseAllocLines($('customField').value);
+  const total = humans.length * gensList.length * seeds.length;
+  const weights = Object.fromEntries(E.ARCHETYPES.map((a) => [a.key, +$('w_' + a.key).value]));
+  const n = Math.min(3000, Math.max(100, Math.round(+$('nAgents').value || 1000)));
+  $('robRun').disabled = true; $('robOut').innerHTML = '';
+  const it = E.robustnessSweep({ humans, gensList, seeds, n, variation: +$('variation').value, source: $('source').value, weights, pools: { custom: cf.ok, riddler: riddlerPool() }, candidates: c.ok, includeOptima: $('robOpt').checked });
+  let st = it.next(), last = 0;
+  while (!st.done) {
+    if (performance.now() - last > 60) { $('robBar').style.width = Math.round(st.value * 100) + '%'; $('robStatus').textContent = `Running ${total} scenarios… ${Math.round(st.value * 100)}%`; await tick(); last = performance.now(); }
+    st = it.next();
+  }
+  $('robBar').style.width = '100%';
+  robLast = { ...st.value, humans, gensList, seeds, n, total };
+  $('robStatus').textContent = `Done: ${total} scenarios (human-like ${humans.join('/')}%, adaptation ${gensList.join('/')}, seeds ${seeds.join('/')}), ${n.toLocaleString('en-US')} opponents each.`;
+  $('robRun').disabled = false;
+  renderRobust();
+}
+function srcLabel(r, total) {
+  const parts = [];
+  if (r.yours) parts.push('Yours');
+  if (r.g1opt) parts.push(`G1 best in ${r.g1opt}/${total}`);
+  if (r.g2opt) parts.push(`G2 best in ${r.g2opt}/${total}`);
+  return parts.join(', ');
+}
+function robTable(rows, key, total, unit) {
+  const sorted = rows.slice().sort((a, b) => b[key].mean - a[key].mean);
+  const minMax = Math.min(...rows.map((r) => r[key].maxRegret));
+  const body = (list) => list.map((r, i) => `<tr class="${i === 0 ? 'best' : ''}"><td>${r.a.join(' / ')}</td><td>${srcLabel(r, total)}</td><td>${f2(r[key].mean)}${key === 'g2' ? ` <span class="hint">(${pct(r.g2.meanFirst)} 1st)</span>` : ''}</td><td>${f2(r[key].worst)}</td><td>${f2(r[key].meanRegret)}</td><td${Math.abs(r[key].maxRegret - minMax) < 1e-9 ? ' class="hl"' : ''}>${f2(r[key].maxRegret)}</td><td>${r[key].meanRank.toFixed(1)}</td><td>${pct(r[key].top3)}</td></tr>`).join('');
+  const head = `<thead><tr><th>Allocation</th><th>Source</th><th>Mean ${unit}</th><th>Worst</th><th>Avg. regret</th><th>Max regret</th><th>Avg. rank</th><th>Top 3</th></tr></thead>`;
+  const top = sorted.slice(0, 10), rest = sorted.slice(10);
+  return `<div class="scroll"><table>${head}<tbody>${body(top)}</tbody></table></div>` + (rest.length ? `<details style="margin-top:8px"><summary>Show all ${sorted.length} candidates</summary><div class="scroll"><table>${head}<tbody>${body(sorted)}</tbody></table></div></details>` : '');
+}
+function pickSummary(rows, key) {
+  const byMean = rows.slice().sort((a, b) => b[key].mean - a[key].mean)[0];
+  const byMax = rows.slice().sort((a, b) => a[key].maxRegret - b[key].maxRegret || b[key].mean - a[key].mean)[0];
+  return { byMean, byMax };
+}
+function renderRobust() {
+  if (!robLast) return;
+  const R = robLast, s1 = pickSummary(R.rows, 'g1'), s2 = pickSummary(R.rows, 'g2');
+  const line = (s, key, unit) => s.byMean === s.byMax
+    ? `<b>${s.byMean.a.join(' / ')}</b> has both the highest average (${f2(s.byMean[key].mean)} ${unit}) and the smallest worst-case regret (${f2(s.byMean[key].maxRegret)}).`
+    : `Highest average: <b>${s.byMean.a.join(' / ')}</b> (${f2(s.byMean[key].mean)} ${unit}, max regret ${f2(s.byMean[key].maxRegret)}). Smallest worst-case regret: <b>${s.byMax.a.join(' / ')}</b> (${f2(s.byMax[key].mean)} ${unit}, max regret ${f2(s.byMax[key].maxRegret)}).`;
+  $('robOut').innerHTML = `<div class="rob-sum"><p><b>Game 1.</b> ${line(s1, 'g1', 'castle points')}</p><p><b>Game 2.</b> ${line(s2, 'g2', 'placement points')}</p>
+    <button class="btn small" id="robCopy">Copy summary</button></div>
+    <h3>Game 1: average castle points (max 15)</h3>${robTable(R.rows, 'g1', R.total, 'points')}
+    <h3>Game 2: expected placement points (max 9)</h3>${robTable(R.rows, 'g2', R.total, 'points')}
+    <p class="hint">Regret is how far a candidate falls short of the best candidate in that scenario (0 means it was the best there). Max regret is its worst shortfall across all scenarios, highlighted where it is smallest. Differences under about 0.1 can be sampling noise.</p>`;
+  $('robCopy').onclick = async () => {
+    const txt = `Robustness check: ${R.total} scenarios (human-like ${R.humans.join('/')}%, adaptation ${R.gensList.join('/')} generations, seeds ${R.seeds.join('/')}), ${R.n} opponents each.\n`
+      + `Game 1: highest average ${s1.byMean.a.join('/')} (${f2(s1.byMean.g1.mean)} pts, max regret ${f2(s1.byMean.g1.maxRegret)}); smallest max regret ${s1.byMax.a.join('/')} (${f2(s1.byMax.g1.mean)} pts, max regret ${f2(s1.byMax.g1.maxRegret)}).\n`
+      + `Game 2: highest average ${s2.byMean.a.join('/')} (${f2(s2.byMean.g2.mean)} pts, ${pct(s2.byMean.g2.meanFirst)} first); smallest max regret ${s2.byMax.a.join('/')} (${f2(s2.byMax.g2.mean)} pts, max regret ${f2(s2.byMax.g2.maxRegret)}).`;
+    try { await navigator.clipboard.writeText(txt); $('robCopy').textContent = 'Copied'; } catch (e) { $('robCopy').textContent = 'Copy failed'; }
+  };
+}
+$('robRun').onclick = () => { runRobust().catch((e) => { $('robStatus').textContent = 'Something went wrong: ' + e.message; $('robRun').disabled = false; }); };
 
 $('g1btn').onclick = () => { game = 1; render(); };
 $('g2btn').onclick = () => { game = 2; render(); };
